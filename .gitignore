@@ -1,9 +1,8 @@
 .env
-__pycache__/
+*.pem
 *.db
+__pycache__/
 .venv/
 venv/
-private_key.pem
-public_key.pem
-*.pem
-deadlines.db
+gen.py
+flowstate/

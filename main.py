@@ -1,20 +1,30 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 from groq import Groq
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
 
 import sqlite3
 import os
 import json
-from datetime import datetime
+import re
 
 load_dotenv()
 
-app = FastAPI()
+# ---------------- APP ----------------
 
-# ---------------- CORS ----------------
+limiter = Limiter(key_func=get_remote_address)
+app     = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,6 +32,41 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------- SECURITY ----------------
+
+SECRET_KEY        = os.getenv("SECRET_KEY", "deadlineai-secret-change-in-production-xk92jd8s7f")
+ALGORITHM         = "HS256"
+TOKEN_EXPIRE_DAYS = 7
+pwd_context       = CryptContext(schemes=["bcrypt"], deprecated="auto")
+bearer            = HTTPBearer()
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_token(email: str) -> str:
+    expire  = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS)
+    payload = {"sub": email, "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email   = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return email
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token expired or invalid. Please login again.")
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)) -> str:
+    return decode_token(credentials.credentials)
+
+def validate_email(email: str) -> bool:
+    return bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email.strip()))
 
 # ---------------- GROQ ----------------
 
@@ -52,25 +97,41 @@ def safe_parse_json(text: str):
 
 # ---------------- DATABASE ----------------
 
-conn = sqlite3.connect("deadlines.db", check_same_thread=False)
+conn   = sqlite3.connect("deadlines.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    email      TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    password   TEXT NOT NULL,
+    created_at TEXT NOT NULL
+)
+""")
+
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS deadlines (
-    id TEXT PRIMARY KEY,
-    subject TEXT,
-    deadline TEXT,
-    urgency TEXT,
-    email TEXT,
-    phone TEXT,
+    id         TEXT PRIMARY KEY,
+    subject    TEXT,
+    deadline   TEXT,
+    urgency    TEXT,
+    email      TEXT,
     created_at TEXT
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS push_subscriptions (
-    email TEXT PRIMARY KEY,
+    email        TEXT PRIMARY KEY,
     subscription TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS login_attempts (
+    ip           TEXT,
+    email        TEXT,
+    attempted_at TEXT
 )
 """)
 
@@ -79,9 +140,7 @@ conn.commit()
 # ---------------- SCHEDULER ----------------
 
 scheduler = BackgroundScheduler(
-    job_defaults={
-        'misfire_grace_time': 60 * 60
-    }
+    job_defaults={"misfire_grace_time": 60 * 60}
 )
 
 def auto_delete_passed_deadlines():
@@ -90,11 +149,7 @@ def auto_delete_passed_deadlines():
     conn.commit()
     print(f"Auto-cleaned passed deadlines at {now}")
 
-scheduler.add_job(
-    auto_delete_passed_deadlines,
-    "interval",
-    hours=1
-)
+scheduler.add_job(auto_delete_passed_deadlines, "interval", hours=1)
 
 def saturday_nudge():
     print("Saturday nudge firing!")
@@ -104,48 +159,81 @@ def saturday_nudge():
         deadlines = check_conflicts(email)
         if deadlines:
             items = "\n".join([f"- {d['subject']} by {d['deadline']}" for d in deadlines])
-            body = f"Hey!\n\nYou have these deadlines coming up:\n\n{items}\n\nStay ahead of it!"
+            body  = f"Hey!\n\nYou have these deadlines coming up:\n\n{items}\n\nStay ahead of it!"
         else:
-            body = "Hey!\n\nYou have no deadlines set. Open DeadlineAI and add this week's tasks before you forget!"
-        send_email(email, "DeadlineAI — Saturday Check-in", body)
+            body = "Hey!\n\nYou have no deadlines set. Open DeadlineAI and add this week's tasks!"
+        send_email(email, "DeadlineAI — Weekly Check-in", body)
         cursor.execute("SELECT subscription FROM push_subscriptions WHERE email=?", (email,))
         row = cursor.fetchone()
         if row:
-            send_push(row[0], "DeadlineAI Reminder", body)
+            send_push(row[0], "DeadlineAI", body[:100])
 
-scheduler.add_job(
-    saturday_nudge,
-    "cron",
-    day_of_week="sat",
-    hour=12,
-    minute=0
-)
-
+scheduler.add_job(saturday_nudge, "cron", day_of_week="sat", hour=9, minute=0)
 scheduler.start()
 
 # ---------------- DATA MODELS ----------------
 
-class DeadlineInput(BaseModel):
-    message: str
-    email: str
-    phone: str
+class RegisterInput(BaseModel):
+    name:     str
+    email:    str
+    password: str
+
+class LoginInput(BaseModel):
+    email:    str
+    password: str
 
 class ChatInput(BaseModel):
     message: str
-    email: str
-    phone: str
 
 class PushSubscription(BaseModel):
-    email: str
     subscription: dict
 
 conversation_history = []
 
-# ---------------- PUSH NOTIFICATION ----------------
+# ---------------- BRUTE FORCE ----------------
+
+def check_brute_force(ip: str, email: str):
+    window = (datetime.now() - timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "SELECT COUNT(*) FROM login_attempts WHERE ip=? AND email=? AND attempted_at > ?",
+        (ip, email, window)
+    )
+    if cursor.fetchone()[0] >= 5:
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in 15 minutes.")
+
+def record_attempt(ip: str, email: str):
+    cursor.execute(
+        "INSERT INTO login_attempts VALUES (?, ?, ?)",
+        (ip, email, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    )
+    conn.commit()
+
+def clear_attempts(ip: str, email: str):
+    cursor.execute("DELETE FROM login_attempts WHERE ip=? AND email=?", (ip, email))
+    conn.commit()
+
+# ---------------- EMAIL ----------------
+
+def send_email(to: str, subject: str, body: str):
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        msg            = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"]    = os.getenv("YOUR_EMAIL")
+        msg["To"]      = to
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(os.getenv("YOUR_EMAIL"), os.getenv("YOUR_EMAIL_PASSWORD"))
+            server.send_message(msg)
+        print(f"Email sent to {to}")
+    except Exception as e:
+        print("Email failed:", e)
+
+# ---------------- PUSH ----------------
 
 def send_push(subscription_json: str, title: str, body: str):
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
         subscription = json.loads(subscription_json)
         webpush(
             subscription_info=subscription,
@@ -153,30 +241,12 @@ def send_push(subscription_json: str, title: str, body: str):
             vapid_private_key=os.getenv("VAPID_PRIVATE_KEY"),
             vapid_claims={"sub": f"mailto:{os.getenv('YOUR_EMAIL')}"}
         )
-        print(f"Push sent to {subscription['endpoint'][:40]}...")
     except Exception as e:
         print("Push failed:", e)
 
-# ---------------- EMAIL ----------------
+# ---------------- REMINDER ----------------
 
-def send_email(email: str, subject: str, body: str):
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"]    = os.getenv("YOUR_EMAIL")
-        msg["To"]      = email
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(os.getenv("YOUR_EMAIL"), os.getenv("YOUR_EMAIL_PASSWORD"))
-            server.send_message(msg)
-        print(f"Email sent to {email}")
-    except Exception as e:
-        print("Email failed:", e)
-
-# ---------------- NOTIFICATIONS ----------------
-
-def send_reminder(subject: str, email: str, phone: str, time_left: str):
+def send_reminder(subject: str, email: str, time_left: str):
     print(f"Reminder triggered: {subject}")
     body = f"Hey!\n\nDeadlineAI Reminder\n\nSubject: {subject}\nTime: {time_left}\n\nDon't miss it!"
     send_email(email, f"⏰ Reminder: {subject}", body)
@@ -185,14 +255,13 @@ def send_reminder(subject: str, email: str, phone: str, time_left: str):
     if row:
         send_push(row[0], f"Deadline: {subject}", f"Due at {time_left}")
 
-# ---------------- AI EXTRACTION ----------------
+# ---------------- AI FUNCTIONS ----------------
 
 def extract_deadline(message: str):
     prompt = f"""
 Extract ALL deadlines from this message: "{message}"
 
-Return ONLY raw JSON array like this:
-
+Return ONLY a raw JSON array:
 [
   {{
     "subject": "assignment or exam name",
@@ -206,30 +275,26 @@ Today is {datetime.now().strftime("%Y-%m-%d %H:%M")}.
 
 Rules:
 - If no time mentioned assume 23:59
-- For reminder_times:
-  * If deadline is more than 1 hour away: remind 30 min before and 10 min before
-  * If deadline is 30-60 min away: remind 15 min before and 5 min before
-  * If deadline is less than 30 min away: remind 2 min from now and at the deadline time
-- reminder_times must ALWAYS be in the future from now
+- If deadline more than 1 hour away: remind 30 min and 10 min before
+- If deadline 30-60 min away: remind 15 min and 5 min before
+- If deadline less than 30 min away: remind 2 min from now
+- reminder_times must always be in the future
 - No markdown, no explanation
 """
     return safe_parse_json(call_ai(prompt))
 
 def extract_email_details(message: str) -> dict:
     prompt = f"""
-Extract email details from this message: "{message}"
+Extract email details from: "{message}"
 
 Return ONLY raw JSON:
 {{
-  "to": "recipient email address",
-  "subject": "email subject line",
-  "body": "full email body content"
+  "to": "recipient email",
+  "subject": "email subject",
+  "body": "email body"
 }}
 
-Rules:
-- Write a professional friendly email body based on what the user said
-- If subject not mentioned create a suitable one
-- No markdown, no explanation
+Write a professional friendly body. No markdown.
 """
     return safe_parse_json(call_ai(prompt))
 
@@ -237,20 +302,19 @@ Rules:
 
 def check_conflicts(email: str):
     cursor.execute("SELECT subject, deadline FROM deadlines WHERE email=?", (email,))
-    rows = cursor.fetchall()
-    return [{"subject": r[0], "deadline": r[1]} for r in rows]
+    return [{"subject": r[0], "deadline": r[1]} for r in cursor.fetchall()]
 
 def suggest_reschedule(message: str):
-    prompt = f'Suggest a better deadline based on: "{message}". Return ONLY raw JSON: {{"new_deadline":"YYYY-MM-DD HH:MM","reason":"..."}}'
+    prompt = f'Suggest a better deadline for: "{message}". Return ONLY raw JSON: {{"new_deadline":"YYYY-MM-DD HH:MM","reason":"..."}}'
     return safe_parse_json(call_ai(prompt))
 
-def send_summary(email: str, phone: str):
+def send_summary(email: str):
     deadlines = check_conflicts(email)
     if deadlines:
-        summary = "\n".join([f"- {d['subject']} by {d['deadline']}" for d in deadlines])
-        body = f"Hey!\n\nYour deadline summary:\n\n{summary}\n\nStay on top of it!"
+        items = "\n".join([f"- {d['subject']} by {d['deadline']}" for d in deadlines])
+        body  = f"Your deadline summary:\n\n{items}\n\nStay on top of it!"
     else:
-        body = "Hey!\n\nYou have no upcoming deadlines. You're all clear!"
+        body = "You have no upcoming deadlines. You're all clear!"
     send_email(email, "Your DeadlineAI Summary", body)
     return {"sent": True, "count": len(deadlines)}
 
@@ -260,113 +324,93 @@ def delete_passed_deadlines(email: str):
     conn.commit()
     return {"deleted": cursor.rowcount}
 
-def safe_send_custom_email(message: str):
-    try:
-        details = extract_email_details(message)
-
-        # safely handle any key the AI might return
-        to      = (details.get("to")
-                or details.get("to_email")
-                or details.get("email")
-                or details.get("recipient")
-                or None)
-
-        subject = (details.get("subject")
-                or details.get("title")
-                or details.get("email_subject")
-                or "Message from DeadlineAI")
-
-        body    = (details.get("body")
-                or details.get("message")
-                or details.get("content")
-                or details.get("email_body")
-                or message)
-
-        if not to:
-            return {
-                "sent": False,
-                "error": "Could not find recipient email. Please include an email address like someone@gmail.com"
-            }
-
-        send_email(to, subject, body)
-        return {"sent": True, "to": to}
-
-    except json.JSONDecodeError:
-        return {"sent": False, "error": "Could not understand the email details. Please try again."}
-    except Exception as e:
-        return {"sent": False, "error": str(e)}
-def delete_deadline(email: str, message: str) -> dict:
-    prompt = f"""
-Extract the deadline name to delete from: "{message}"
-
-Return ONLY raw JSON:
-{{
-  "name": "name of the deadline to delete"
-}}
-
-No markdown, no explanation.
-"""
+def delete_deadline(email: str, message: str):
+    prompt = f'What deadline name should be deleted from: "{message}"? Return ONLY raw JSON: {{"name":"deadline name or null if all"}}'
     try:
         details = safe_parse_json(call_ai(prompt))
-        name    = (details.get("name")
-                or details.get("subject")
-                or details.get("deadline")
-                or None)
-
-        if not name:
-            # if cant extract name, delete all for this user
+        name    = details.get("name")
+        if not name or name == "null":
             cursor.execute("DELETE FROM deadlines WHERE email=?", (email,))
             conn.commit()
             return {"deleted": True, "message": "Deleted all your deadlines"}
-
         cursor.execute(
             "DELETE FROM deadlines WHERE email=? AND LOWER(subject) LIKE ?",
             (email, f"%{name.lower()}%")
         )
         conn.commit()
-
         if cursor.rowcount == 0:
-            return {"deleted": False, "error": f"Could not find deadline matching '{name}'"}
-
-        return {"deleted": True, "message": f"Deleted '{name}' deadline"}
-
+            return {"deleted": False, "error": f"Could not find '{name}'"}
+        return {"deleted": True, "message": f"Deleted '{name}'"}
     except Exception as e:
         return {"deleted": False, "error": str(e)}
 
+def rename_deadline(email: str, message: str):
+    prompt = f'Extract rename from: "{message}". Return ONLY raw JSON: {{"old_name":"...","new_name":"..."}}'
+    try:
+        details  = safe_parse_json(call_ai(prompt))
+        old_name = details.get("old_name") or details.get("from")
+        new_name = details.get("new_name") or details.get("to")
+        if not old_name or not new_name:
+            return {"renamed": False, "error": "Could not understand names"}
+        cursor.execute(
+            "UPDATE deadlines SET subject=? WHERE email=? AND LOWER(subject) LIKE ?",
+            (new_name, email, f"%{old_name.lower()}%")
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return {"renamed": False, "error": f"Could not find '{old_name}'"}
+        return {"renamed": True, "from": old_name, "to": new_name}
+    except Exception as e:
+        return {"renamed": False, "error": str(e)}
+
+def safe_send_custom_email(message: str):
+    try:
+        details = extract_email_details(message)
+        to      = details.get("to") or details.get("to_email") or details.get("email") or details.get("recipient")
+        subject = details.get("subject") or details.get("title") or "Message from DeadlineAI"
+        body    = details.get("body") or details.get("message") or details.get("content") or message
+        if not to:
+            return {"sent": False, "error": "No recipient email found. Please include an email address."}
+        send_email(to, subject, body)
+        return {"sent": True, "to": to}
+    except Exception as e:
+        return {"sent": False, "error": str(e)}
+
 # ---------------- TOOL REGISTRY ----------------
 
-TOOLS = {
-    "extract_deadline":        lambda data: extract_deadline(data.message),
-    "check_conflicts":         lambda data: check_conflicts(data.email),
-    "suggest_reschedule":      lambda data: suggest_reschedule(data.message),
-    "send_summary":            lambda data: send_summary(data.email, data.phone),
-    "delete_deadline":         lambda data: delete_deadline(data.email, data.message),
-    "delete_passed_deadlines": lambda data: delete_passed_deadlines(data.email),
-    "send_custom_email":       lambda data: safe_send_custom_email(data.message),
-    "do_nothing":              lambda data: {"status": "no action needed"},
-}
-
-def execute_tool(tool_name: str, data):
-    fn = TOOLS.get(tool_name)
+def execute_tool(tool_name: str, message: str, email: str):
+    tools = {
+        "extract_deadline":        lambda: extract_deadline(message),
+        "check_conflicts":         lambda: check_conflicts(email),
+        "suggest_reschedule":      lambda: suggest_reschedule(message),
+        "send_summary":            lambda: send_summary(email),
+        "delete_passed_deadlines": lambda: delete_passed_deadlines(email),
+        "delete_deadline":         lambda: delete_deadline(email, message),
+        "rename_deadline":         lambda: rename_deadline(email, message),
+        "send_custom_email":       lambda: safe_send_custom_email(message),
+        "do_nothing":              lambda: {"status": "no action needed"},
+    }
+    fn = tools.get(tool_name)
     if not fn:
         return {"error": f"unknown tool: {tool_name}"}
-    return fn(data)
+    return fn()
 
 # ---------------- PLANNER ----------------
 
 def plan(user_message: str, history: list) -> dict:
     prompt = f"""
-You are a deadline management agent. Decide which tool to call.
+You are a deadline management agent. Pick the right tool.
 
 Tools:
-- extract_deadline: user is giving a new deadline to save
+- extract_deadline: user giving a new deadline to save
 - check_conflicts: user wants to see their deadlines
 - suggest_reschedule: user wants to reschedule something
-- send_summary: user wants a summary sent to their email
-- delete_passed_deadlines: user wants to delete completed or past deadlines
-- send_custom_email: user wants to send an email to someone else
-- do_nothing: message is casual or greeting, no action needed
-- delete_deadline: user wants to delete a specific deadline by name, or delete all deadlines
+- send_summary: user wants a summary emailed to them
+- delete_passed_deadlines: delete only past deadlines
+- delete_deadline: delete a specific deadline by name or all
+- rename_deadline: rename a deadline
+- send_custom_email: send an email to someone else
+- do_nothing: casual chat, greetings, no action needed
 
 Return ONLY raw JSON: {{"tool": "...", "reason": "..."}}
 
@@ -377,140 +421,167 @@ Message: "{user_message}"
 
 # ---------------- AGENT LOOP ----------------
 
-def agent_loop(data: ChatInput) -> dict:
-    conversation_history.append({"role": "user", "content": data.message})
+def agent_loop(message: str, email: str) -> dict:
+    conversation_history.append({"role": "user", "content": message})
 
-    steps = []
-    for _ in range(5):
+    try:
+        action    = plan(message, conversation_history)
+        tool_name = action.get("tool", "do_nothing")
+    except Exception:
+        tool_name = "do_nothing"
+
+    if tool_name == "extract_deadline":
         try:
-            action    = plan(data.message, conversation_history)
-            tool_name = action.get("tool", "do_nothing")
-        except Exception:
-            tool_name = "do_nothing"
-
-        if tool_name == "extract_deadline":
-            try:
-                extracted_list = extract_deadline(data.message)
-                for extracted in extracted_list:
-                    deadline_id = f"deadline_{datetime.now().timestamp()}"
-                    cursor.execute(
-                        "INSERT INTO deadlines VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            deadline_id,
-                            extracted.get("subject", "Unknown"),
-                            extracted.get("deadline", ""),
-                            extracted.get("urgency", "medium"),
-                            data.email,
-                            data.phone,
-                            datetime.now().strftime("%Y-%m-%d %H:%M")
-                        )
+            extracted_list = extract_deadline(message)
+            saved          = []
+            for extracted in extracted_list:
+                deadline_id = f"deadline_{datetime.now().timestamp()}"
+                cursor.execute(
+                    "INSERT INTO deadlines VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        deadline_id,
+                        extracted.get("subject", "Unknown"),
+                        extracted.get("deadline", ""),
+                        extracted.get("urgency", "medium"),
+                        email,
+                        datetime.now().strftime("%Y-%m-%d %H:%M")
                     )
-                    conn.commit()
-                    for reminder_time in extracted.get("reminder_times", []):
-                        try:
-                            scheduler.add_job(
-                                send_reminder,
-                                "date",
-                                run_date=datetime.strptime(reminder_time, "%Y-%m-%d %H:%M"),
-                                args=[extracted.get("subject", ""), data.email, data.phone,
-                                      f"Reminder time: {reminder_time}"]
-                            )
-                        except Exception as e:
-                            print(f"Scheduler error: {e}")
-                result = {"saved": [e.get("subject", "deadline") for e in extracted_list]}
-            except Exception as e:
-                result = {"error": str(e)}
-        else:
-            try:
-                result = execute_tool(tool_name, data)
-            except Exception as e:
-                result = {"error": str(e)}
+                )
+                conn.commit()
+                saved.append(extracted.get("subject", "deadline"))
+                for rt in extracted.get("reminder_times", []):
+                    try:
+                        scheduler.add_job(
+                            send_reminder, "date",
+                            run_date=datetime.strptime(rt, "%Y-%m-%d %H:%M"),
+                            args=[extracted.get("subject", ""), email, f"Reminder: {rt}"]
+                        )
+                    except Exception as e:
+                        print(f"Scheduler error: {e}")
+            result = {"saved": saved}
+        except Exception as e:
+            result = {"error": str(e)}
+    else:
+        try:
+            result = execute_tool(tool_name, message, email)
+        except Exception as e:
+            result = {"error": str(e)}
 
-        steps.append({"tool": tool_name, "result": result})
-        conversation_history.append({
-            "role": "assistant",
-            "content": f"Used {tool_name}: {result}"
-        })
-        break
-        "delete_deadline",
+    conversation_history.append({"role": "assistant", "content": f"Used {tool_name}: {result}"})
+    return {"steps": [{"tool": tool_name, "result": result}], "final": result}
 
-    return {"steps": steps, "final": steps[-1]["result"]}
+# ================================================================
+# AUTH ENDPOINTS
+# ================================================================
 
-# ---------------- ENDPOINTS ----------------
+@app.post("/register")
+@limiter.limit("5/minute")
+async def register(request: Request, data: RegisterInput):
+    name     = data.name.strip()
+    email    = data.email.strip().lower()
+    password = data.password.strip()
+
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Name must be at least 2 characters.")
+    if not validate_email(email):
+        raise HTTPException(status_code=400, detail="Invalid email address.")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    cursor.execute("SELECT email FROM users WHERE email=?", (email,))
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail="Account already exists. Please login.")
+
+    try:
+        cursor.execute(
+            "INSERT INTO users VALUES (?, ?, ?, ?)",
+            (email, name, hash_password(password), datetime.now().strftime("%Y-%m-%d %H:%M"))
+        )
+        conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not create account: {str(e)}")
+
+    token = create_token(email)
+    return {"status": "success", "token": token, "user": {"name": name, "email": email}}
+
+
+@app.post("/login")
+@limiter.limit("10/minute")
+async def login(request: Request, data: LoginInput):
+    ip    = request.client.host
+    email = data.email.strip().lower()
+
+    if not validate_email(email):
+        raise HTTPException(status_code=400, detail="Invalid email address.")
+
+    check_brute_force(ip, email)
+
+    cursor.execute("SELECT name, email, password FROM users WHERE email=?", (email,))
+    row = cursor.fetchone()
+
+    if not row:
+        record_attempt(ip, email)
+        raise HTTPException(status_code=401, detail="No account found. Please sign up first.")
+
+    if not verify_password(data.password, row[2]):
+        record_attempt(ip, email)
+        raise HTTPException(status_code=401, detail="Wrong password. Please try again.")
+
+    clear_attempts(ip, email)
+    token = create_token(email)
+    return {"status": "success", "token": token, "user": {"name": row[0], "email": row[1]}}
+
+
+@app.get("/me")
+async def get_me(email: str = Depends(get_current_user)):
+    cursor.execute("SELECT name, email, created_at FROM users WHERE email=?", (email,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"name": row[0], "email": row[1], "created_at": row[2]}
+
+
+@app.post("/chat")
+@limiter.limit("20/minute")
+async def chat(request: Request, data: ChatInput, email: str = Depends(get_current_user)):
+    try:
+        result = agent_loop(data.message, email)
+        return {"status": "success", **result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/deadlines")
+@limiter.limit("30/minute")
+async def get_deadlines(request: Request, email: str = Depends(get_current_user)):
+    cursor.execute(
+        "SELECT id, subject, deadline, urgency, email, created_at FROM deadlines WHERE email=?",
+        (email,)
+    )
+    rows = cursor.fetchall()
+    return [
+        {"id": r[0], "subject": r[1], "deadline": r[2],
+         "urgency": r[3], "email": r[4], "created_at": r[5]}
+        for r in rows
+    ]
+
 
 @app.post("/subscribe-push")
-async def subscribe_push(data: PushSubscription):
+@limiter.limit("10/minute")
+async def subscribe_push(request: Request, data: PushSubscription, email: str = Depends(get_current_user)):
     try:
         cursor.execute(
             "INSERT OR REPLACE INTO push_subscriptions VALUES (?, ?)",
-            (data.email, json.dumps(data.subscription))
+            (email, json.dumps(data.subscription))
         )
         conn.commit()
         return {"status": "subscribed"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/add-deadline")
-async def add_deadline(data: DeadlineInput):
-    try:
-        extracted_list = extract_deadline(data.message)
-        saved_deadlines = []
-        for extracted in extracted_list:
-            deadline_id = f"deadline_{datetime.now().timestamp()}"
-            cursor.execute(
-                "INSERT INTO deadlines VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    deadline_id,
-                    extracted.get("subject", "Unknown"),
-                    extracted.get("deadline", ""),
-                    extracted.get("urgency", "medium"),
-                    data.email,
-                    data.phone,
-                    datetime.now().strftime("%Y-%m-%d %H:%M")
-                )
-            )
-            conn.commit()
-            saved_deadlines.append(extracted.get("subject", "deadline"))
-            for reminder_time in extracted.get("reminder_times", []):
-                try:
-                    scheduler.add_job(
-                        send_reminder,
-                        "date",
-                        run_date=datetime.strptime(reminder_time, "%Y-%m-%d %H:%M"),
-                        args=[extracted.get("subject", ""), data.email, data.phone,
-                              f"Reminder time: {reminder_time}"]
-                    )
-                except Exception as e:
-                    print(f"Scheduler error: {e}")
-        return {"status": "success", "saved": saved_deadlines}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.get("/deadlines")
-def get_deadlines():
-    cursor.execute("SELECT * FROM deadlines")
-    rows = cursor.fetchall()
-    result = []
-    for r in rows:
-        result.append({
-            "id":         r[0],
-            "subject":    r[1],
-            "deadline":   r[2],
-            "urgency":    r[3],
-            "email":      r[4],
-            "phone":      r[5],
-            "created_at": r[6]
-        })
-    return result
 
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}
-
-@app.post("/chat")
-async def chat(data: ChatInput):
-    try:
-        result = agent_loop(data)
-        return {"status": "success", **result}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}

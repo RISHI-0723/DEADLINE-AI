@@ -7,109 +7,96 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root[data-theme="dark"] {
-  --bg:        #0f0f0f;
-  --surface:   #1a1a1a;
-  --surface2:  #242424;
-  --surface3:  #2e2e2e;
-  --border:    #2a2a2a;
-  --text:      #ffffff;
-  --text2:     #aaaaaa;
-  --text3:     #666666;
-  --accent:    #6c63ff;
-  --accent2:   #5a52d5;
-  --user-msg:  #6c63ff;
-  --bot-msg:   #242424;
+  --bg:       #0f0f0f;
+  --surface:  #1a1a1a;
+  --surface2: #242424;
+  --surface3: #2e2e2e;
+  --border:   #2a2a2a;
+  --text:     #ffffff;
+  --text2:    #aaaaaa;
+  --text3:    #666666;
+  --accent:   #6c63ff;
+  --user-msg: #6c63ff;
+  --bot-msg:  #242424;
 }
 :root[data-theme="light"] {
-  --bg:        #f0f0f5;
-  --surface:   #ffffff;
-  --surface2:  #f5f5f5;
-  --surface3:  #ebebeb;
-  --border:    #e0e0e0;
-  --text:      #111111;
-  --text2:     #555555;
-  --text3:     #999999;
-  --accent:    #6c63ff;
-  --accent2:   #5a52d5;
-  --user-msg:  #6c63ff;
-  --bot-msg:   #ebebeb;
+  --bg:       #f0f0f5;
+  --surface:  #ffffff;
+  --surface2: #f5f5f5;
+  --surface3: #ebebeb;
+  --border:   #e0e0e0;
+  --text:     #111111;
+  --text2:    #555555;
+  --text3:    #999999;
+  --accent:   #6c63ff;
+  --user-msg: #6c63ff;
+  --bot-msg:  #ebebeb;
 }
-
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;transition:background 0.2s,color 0.2s,border-color 0.2s;}
 body{background:var(--bg);color:var(--text);display:flex;justify-content:center;align-items:center;min-height:100vh;}
-
-.app{width:480px;height:780px;background:var(--surface);border-radius:24px;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,0.3);}
-
-/* ======= SCREENS ======= */
+.app{width:460px;height:780px;background:var(--surface);border-radius:24px;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,0.3);}
 .screen{display:none;flex:1;flex-direction:column;}
 .screen.active{display:flex;}
 
-/* ======= AUTH SCREEN ======= */
-.auth{justify-content:center;padding:40px;}
+/* ======= AUTH ======= */
+.auth-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px;}
 .auth-logo{text-align:center;margin-bottom:32px;}
-.auth-logo h1{font-size:28px;font-weight:700;}
+.auth-logo h1{font-size:30px;font-weight:700;letter-spacing:-0.5px;}
 .auth-logo h1 span{color:var(--accent);}
-.auth-logo p{color:var(--text2);font-size:13px;margin-top:6px;}
-
-.auth-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:4px;margin-bottom:24px;}
-.auth-tab{flex:1;padding:10px;text-align:center;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);border:none;background:none;}
+.auth-logo p{color:var(--text2);font-size:13px;margin-top:8px;}
+.auth-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:4px;margin-bottom:24px;gap:4px;}
+.auth-tab{flex:1;padding:10px;text-align:center;border-radius:9px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);border:none;background:none;transition:all 0.2s;}
 .auth-tab.active{background:var(--accent);color:white;}
-
-.auth-form{display:flex;flex-direction:column;gap:14px;}
-.field{display:flex;flex-direction:column;gap:6px;}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
 .field label{font-size:12px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;}
-.field input{padding:13px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;outline:none;transition:border-color 0.2s;}
+.field input{padding:13px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;outline:none;transition:border-color 0.2s;}
 .field input:focus{border-color:var(--accent);}
 .field input::placeholder{color:var(--text3);}
-
-.auth-btn{background:var(--accent);border:none;padding:14px;border-radius:12px;color:white;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px;transition:opacity 0.2s,transform 0.1s;}
+.auth-btn{width:100%;background:var(--accent);border:none;padding:14px;border-radius:12px;color:white;font-size:15px;font-weight:600;cursor:pointer;margin-top:6px;transition:opacity 0.2s,transform 0.1s;}
 .auth-btn:hover{opacity:0.9;}
 .auth-btn:active{transform:scale(0.98);}
+.auth-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.error-box{background:#3b1a1a;border:1px solid #ff6b6b33;color:#ff6b6b;font-size:13px;padding:10px 14px;border-radius:10px;margin-bottom:12px;display:none;}
+.success-box{background:#1a2a1a;border:1px solid #6bcb7733;color:#6bcb77;font-size:13px;padding:10px 14px;border-radius:10px;margin-bottom:12px;display:none;}
 
-/* ======= MAIN SCREEN ======= */
-.main-screen{flex-direction:column;}
-
-/* --- NAV BAR --- */
-.navbar{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface);}
+/* ======= MAIN ======= */
+.navbar{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
 .nav-logo{font-size:18px;font-weight:700;}
 .nav-logo span{color:var(--accent);}
-.nav-right{display:flex;align-items:center;gap:8px;}
-.nav-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:8px;border-radius:10px;font-size:18px;transition:background 0.2s,color 0.2s;}
-.nav-btn:hover{background:var(--surface2);color:var(--text);}
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--border);margin-right:4px;}
+.nav-right{display:flex;align-items:center;gap:6px;}
+.nav-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:8px;border-radius:10px;font-size:18px;transition:background 0.2s;}
+.nav-btn:hover{background:var(--surface2);}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--border);}
 .status-dot.online{background:#4caf50;}
-
-/* --- TABS --- */
-.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--surface);}
+.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
 .tab{flex:1;padding:12px;text-align:center;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 
-/* --- CHAT TAB --- */
-.chat-container{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+/* ======= CHAT ======= */
+.chat-container{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
 .chat{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;}
 .message{max-width:78%;padding:12px 16px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap;}
 .message.user{align-self:flex-end;background:var(--user-msg);color:white;border-bottom-right-radius:4px;}
 .message.bot{align-self:flex-start;background:var(--bot-msg);color:var(--text);border-bottom-left-radius:4px;}
-.input-area{padding:16px;border-top:1px solid var(--border);display:flex;gap:10px;background:var(--surface);}
-.input-area input{flex:1;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;outline:none;transition:border-color 0.2s;}
+.input-area{padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;}
+.input-area input{flex:1;padding:12px 16px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;outline:none;transition:border-color 0.2s;}
 .input-area input:focus{border-color:var(--accent);}
 .input-area input::placeholder{color:var(--text3);}
 .send-btn{background:var(--accent);border:none;padding:12px 18px;border-radius:12px;color:white;cursor:pointer;font-size:14px;font-weight:500;transition:opacity 0.2s;}
 .send-btn:hover{opacity:0.9;}
 .send-btn:disabled{opacity:0.4;cursor:not-allowed;}
 
-/* --- DEADLINES TAB --- */
-.deadlines-container{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;}
-.deadlines-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+/* ======= DEADLINES ======= */
+.deadlines-container{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px;min-height:0;}
+.deadlines-header{display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
 .deadlines-header h3{font-size:16px;font-weight:600;}
-.deadlines-count{font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 10px;border-radius:20px;}
-
-.deadline-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;transition:transform 0.15s;}
-.deadline-card:hover{transform:translateX(3px);}
-.deadline-info{display:flex;flex-direction:column;gap:4px;}
-.deadline-name{font-size:14px;font-weight:600;color:var(--text);}
-.deadline-time{font-size:12px;color:var(--text2);}
-.deadline-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+.dl-count{font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 10px;border-radius:20px;}
+.deadline-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;transition:transform 0.15s,border-color 0.2s;flex-shrink:0;}
+.deadline-card:hover{transform:translateX(4px);border-color:var(--accent);}
+.dl-info{display:flex;flex-direction:column;gap:4px;}
+.dl-name{font-size:14px;font-weight:600;}
+.dl-time{font-size:12px;color:var(--text2);}
+.dl-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
 .urgency{font-size:10px;padding:3px 10px;border-radius:20px;text-transform:uppercase;font-weight:600;letter-spacing:0.5px;}
 .urgency.high{background:#3b1a1a;color:#ff6b6b;}
 .urgency.medium{background:#2a2a1a;color:#ffd93d;}
@@ -117,33 +104,28 @@ body{background:var(--bg);color:var(--text);display:flex;justify-content:center;
 [data-theme="light"] .urgency.high{background:#ffe0e0;color:#cc0000;}
 [data-theme="light"] .urgency.medium{background:#fff4cc;color:#aa6600;}
 [data-theme="light"] .urgency.low{background:#e0f5e0;color:#006600;}
+.dl-countdown{font-size:11px;color:var(--text3);}
+.empty-state{text-align:center;color:var(--text3);font-size:14px;padding:40px 0;margin:auto;}
+.empty-icon{font-size:40px;margin-bottom:12px;}
 
-.deadline-countdown{font-size:11px;color:var(--text3);}
-.empty-state{text-align:center;color:var(--text3);font-size:14px;margin:auto;padding:40px 0;}
-.empty-state .empty-icon{font-size:40px;margin-bottom:12px;}
-
-/* --- PROFILE TAB --- */
-.profile-container{flex:1;overflow-y:auto;padding:24px;}
+/* ======= PROFILE ======= */
+.profile-container{flex:1;overflow-y:auto;padding:24px;min-height:0;}
 .profile-card{background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center;margin-bottom:20px;}
 .profile-avatar{width:72px;height:72px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:white;margin:0 auto 12px;}
 .profile-name{font-size:18px;font-weight:600;}
 .profile-email{font-size:13px;color:var(--text2);margin-top:4px;}
-
-.profile-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+.profile-joined{font-size:11px;color:var(--text3);margin-top:4px;}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
 .stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;}
 .stat-number{font-size:24px;font-weight:700;color:var(--accent);}
 .stat-label{font-size:12px;color:var(--text2);margin-top:4px;}
-
-.profile-section{margin-bottom:16px;}
-.profile-section h4{font-size:13px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
+.section-title{font-size:12px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;}
 .profile-option{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:pointer;transition:background 0.2s;}
 .profile-option:hover{background:var(--surface3);}
-.profile-option-left{display:flex;align-items:center;gap:10px;font-size:14px;}
-.profile-option-icon{font-size:18px;}
-.logout-option{color:#ff6b6b;}
-
-/* toggle switch */
-.toggle{width:44px;height:24px;background:var(--border);border-radius:12px;position:relative;cursor:pointer;transition:background 0.2s;}
+.opt-left{display:flex;align-items:center;gap:10px;font-size:14px;}
+.opt-icon{font-size:18px;}
+.logout-opt{color:#ff6b6b;}
+.toggle{width:44px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background 0.2s;flex-shrink:0;}
 .toggle.on{background:var(--accent);}
 .toggle-knob{width:18px;height:18px;background:white;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform 0.2s;}
 .toggle.on .toggle-knob{transform:translateX(20px);}
@@ -158,8 +140,8 @@ body{background:var(--bg);color:var(--text);display:flex;justify-content:center;
 <div class="app">
 
   <!-- ======= AUTH SCREEN ======= -->
-  <div class="screen active" id="authScreen" style="padding:0;">
-    <div class="auth">
+  <div class="screen active" id="authScreen">
+    <div class="auth-wrap">
       <div class="auth-logo">
         <h1>Deadline<span>AI</span></h1>
         <p>Never miss a deadline again</p>
@@ -170,81 +152,81 @@ body{background:var(--bg);color:var(--text);display:flex;justify-content:center;
         <button class="auth-tab" id="signupTab" onclick="switchTab('signup')">Sign Up</button>
       </div>
 
-      <div class="auth-form" id="authForm">
-        <div class="field" id="nameField" style="display:none;">
-          <label>Your Name</label>
-          <input type="text" id="authName" placeholder="John Doe"/>
-        </div>
-        <div class="field">
-          <label>Email</label>
-          <input type="text" id="authEmail" placeholder="you@gmail.com"/>
-        </div>
-        <div class="field" id="phoneField" style="display:none;">
-          <label>Phone (with country code)</label>
-          <input type="text" id="authPhone" placeholder="+91XXXXXXXXXX"/>
-        </div>
-        <div class="field">
-          <label>Password</label>
-          <input type="password" id="authPassword" placeholder="••••••••"/>
-        </div>
-        <button class="auth-btn" id="authBtn">Login</button>
+      <div id="errorBox" class="error-box"></div>
+      <div id="successBox" class="success-box"></div>
+
+      <!-- name only shown on signup -->
+      <div class="field" id="nameField" style="display:none;">
+        <label>Your Name</label>
+        <input type="text" id="authName" placeholder="John Doe"/>
       </div>
+
+      <div class="field">
+        <label>Email</label>
+        <input type="text" id="authEmail" placeholder="you@gmail.com"/>
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="authPassword" placeholder="Min 8 characters"/>
+      </div>
+
+      <button class="auth-btn" id="authBtn">Login</button>
     </div>
   </div>
 
   <!-- ======= MAIN SCREEN ======= -->
   <div class="screen" id="mainScreen">
 
-    <!-- NAVBAR -->
     <div class="navbar">
       <div class="nav-logo">Deadline<span>AI</span></div>
       <div class="nav-right">
         <div class="status-dot" id="statusDot"></div>
-        <button class="nav-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+        <button class="nav-btn" id="themeBtn" title="Toggle theme">🌙</button>
       </div>
     </div>
 
-    <!-- TABS -->
     <div class="tabs">
-      <div class="tab active" onclick="switchMainTab('chat')" id="chatTab">💬 Chat</div>
-      <div class="tab" onclick="switchMainTab('deadlines')" id="deadlinesTab">📋 Deadlines</div>
-      <div class="tab" onclick="switchMainTab('profile')" id="profileTab">👤 Profile</div>
+      <div class="tab active" id="chatTab"      onclick="switchMainTab('chat')">💬 Chat</div>
+      <div class="tab"        id="deadlinesTab" onclick="switchMainTab('deadlines')">📋 Deadlines</div>
+      <div class="tab"        id="profileTab"   onclick="switchMainTab('profile')">👤 Profile</div>
     </div>
 
-    <!-- CHAT TAB -->
+    <!-- CHAT -->
     <div class="chat-container" id="chatPane">
       <div class="chat" id="chat">
-        <div class="message bot">Hi 👋 Tell me your deadline, or say "check my deadlines", "delete daa assignment", "send an email to someone@gmail.com"!</div>
+        <div class="message bot">Hi 👋 Tell me your deadline! You can also say "check my deadlines", "delete daa assignment", "send me a summary", or "send an email to someone@gmail.com".</div>
       </div>
       <div class="input-area">
-        <input type="text" id="messageInput" placeholder="e.g. ML assignment due tomorrow"/>
+        <input type="text" id="messageInput" placeholder="e.g. ML assignment due tomorrow at 5pm"/>
         <button class="send-btn" id="sendBtn">Send</button>
       </div>
     </div>
 
-    <!-- DEADLINES TAB -->
+    <!-- DEADLINES -->
     <div class="deadlines-container" id="deadlinesPane" style="display:none;">
       <div class="deadlines-header">
         <h3>Your Deadlines</h3>
-        <span class="deadlines-count" id="deadlineCount">0 upcoming</span>
+        <span class="dl-count" id="dlCount">0 upcoming</span>
       </div>
       <div id="deadlinesList">
         <div class="empty-state">
           <div class="empty-icon">📭</div>
-          No deadlines yet. Go to Chat and add one!
+          No deadlines yet.<br>Go to Chat and add one!
         </div>
       </div>
     </div>
 
-    <!-- PROFILE TAB -->
+    <!-- PROFILE -->
     <div class="profile-container" id="profilePane" style="display:none;">
       <div class="profile-card">
-        <div class="profile-avatar" id="profileAvatar">?</div>
-        <div class="profile-name" id="profileName">-</div>
-        <div class="profile-email" id="profileEmailDisplay">-</div>
+        <div class="profile-avatar" id="pAvatar">?</div>
+        <div class="profile-name"  id="pName">-</div>
+        <div class="profile-email" id="pEmail">-</div>
+        <div class="profile-joined" id="pJoined"></div>
       </div>
 
-      <div class="profile-stats">
+      <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-number" id="statTotal">0</div>
           <div class="stat-label">Total deadlines</div>
@@ -255,27 +237,15 @@ body{background:var(--bg);color:var(--text);display:flex;justify-content:center;
         </div>
       </div>
 
-      <div class="profile-section">
-        <h4>Preferences</h4>
-        <div class="profile-option" onclick="toggleTheme()">
-          <div class="profile-option-left">
-            <span class="profile-option-icon">🎨</span>
-            Dark mode
-          </div>
-          <div class="toggle" id="themeToggle" onclick="toggleTheme()">
-            <div class="toggle-knob"></div>
-          </div>
-        </div>
+      <div class="section-title">Preferences</div>
+      <div class="profile-option" onclick="toggleTheme()">
+        <div class="opt-left"><span class="opt-icon">🎨</span> Dark mode</div>
+        <div class="toggle on" id="themeToggle"><div class="toggle-knob"></div></div>
       </div>
 
-      <div class="profile-section">
-        <h4>Account</h4>
-        <div class="profile-option" onclick="logout()">
-          <div class="profile-option-left logout-option">
-            <span class="profile-option-icon">🚪</span>
-            Logout
-          </div>
-        </div>
+      <div class="section-title" style="margin-top:16px;">Account</div>
+      <div class="profile-option" onclick="logout()">
+        <div class="opt-left logout-opt"><span class="opt-icon">🚪</span> Logout</div>
       </div>
     </div>
 
@@ -284,115 +254,179 @@ body{background:var(--bg);color:var(--text);display:flex;justify-content:center;
 
 <script>
 const API = "http://127.0.0.1:8000"
-let currentTab = "login"
-let isDark = true
+const VAPID_PUBLIC_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENFuoymKWLYXI5g7T2yROJ9r6wLtg0NCX3XE3YuCtdZXWI+/tQBM3CBlbPd6POJkkNIMvEK3M3SSPm6K8r6E1hQ=="
+
+let isDark         = true
+let currentAuthTab = "login"
+
+// ======= TOKEN =======
+const getToken    = ()  => localStorage.getItem("dai_token")
+const setToken    = (t) => localStorage.setItem("dai_token", t)
+const clearToken  = ()  => localStorage.removeItem("dai_token")
+const authHeaders = ()  => ({ "Content-Type": "application/json", "Authorization": "Bearer " + getToken() })
 
 // ======= THEME =======
-
 function toggleTheme() {
   isDark = !isDark
   document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light")
-  document.getElementById("themeBtn").innerText     = isDark ? "🌙" : "☀️"
+  document.getElementById("themeBtn").innerText = isDark ? "🌙" : "☀️"
   document.getElementById("themeToggle").classList.toggle("on", isDark)
   localStorage.setItem("dai_theme", isDark ? "dark" : "light")
 }
 
 // ======= AUTH TABS =======
-
 function switchTab(tab) {
-  currentTab = tab
+  currentAuthTab = tab
   document.getElementById("loginTab").classList.toggle("active",  tab === "login")
   document.getElementById("signupTab").classList.toggle("active", tab === "signup")
-  document.getElementById("nameField").style.display  = tab === "signup" ? "flex" : "none"
-  document.getElementById("phoneField").style.display = tab === "signup" ? "flex" : "none"
-  document.getElementById("authBtn").innerText        = tab === "login"  ? "Login" : "Create Account"
+  document.getElementById("nameField").style.display = tab === "signup" ? "flex" : "none"
+  document.getElementById("authBtn").innerText       = tab === "login"  ? "Login" : "Create Account"
+  hideMessages()
+}
+
+function showError(msg) {
+  const el = document.getElementById("errorBox")
+  el.innerText     = msg
+  el.style.display = "block"
+  document.getElementById("successBox").style.display = "none"
+}
+
+function showSuccess(msg) {
+  const el = document.getElementById("successBox")
+  el.innerText     = msg
+  el.style.display = "block"
+  document.getElementById("errorBox").style.display = "none"
+}
+
+function hideMessages() {
+  document.getElementById("errorBox").style.display   = "none"
+  document.getElementById("successBox").style.display = "none"
 }
 
 // ======= AUTH =======
-
-function doAuth() {
+async function doAuth() {
+  const btn      = document.getElementById("authBtn")
   const email    = document.getElementById("authEmail").value.trim()
   const password = document.getElementById("authPassword").value.trim()
   const name     = document.getElementById("authName").value.trim()
-  const phone    = document.getElementById("authPhone").value.trim()
 
-  if(!email || !password)             { alert("Please enter email and password."); return }
-  if(!email.includes("@"))            { alert("Please enter a valid email."); return }
-  if(currentTab === "signup" && !name){ alert("Please enter your name."); return }
-  if(currentTab === "signup" && !phone){ alert("Please enter your phone number."); return }
-  if(currentTab === "signup" && !phone.startsWith("+")){ alert("Phone must include country code e.g. +91XXXXXXXXXX"); return }
+  hideMessages()
 
-  if(currentTab === "signup") {
-    // check if already exists
-    const existing = JSON.parse(localStorage.getItem("dai_users") || "{}")
-    if(existing[email]) { alert("Account already exists! Please login."); switchTab("login"); return }
-    existing[email] = { name, phone, password }
-    localStorage.setItem("dai_users", JSON.stringify(existing))
-  } else {
-    // login — verify
-    const existing = JSON.parse(localStorage.getItem("dai_users") || "{}")
-    if(!existing[email]) { alert("Account not found! Please sign up."); switchTab("signup"); return }
-    if(existing[email].password !== password) { alert("Wrong password!"); return }
+  if(!email || !password)                        { showError("Please fill all fields."); return }
+  if(!email.includes("@"))                       { showError("Please enter a valid email."); return }
+  if(password.length < 8)                        { showError("Password must be at least 8 characters."); return }
+  if(currentAuthTab === "signup" && name.length < 2) { showError("Please enter your name."); return }
+
+  btn.disabled  = true
+  btn.innerText = "Please wait..."
+
+  try {
+    const url  = API + (currentAuthTab === "login" ? "/login" : "/register")
+    const body = currentAuthTab === "login"
+      ? { email, password }
+      : { email, password, name }
+
+    const res  = await fetch(url, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(body)
+    })
+
+    const data = await res.json()
+
+    if(res.ok && data.status === "success") {
+      setToken(data.token)
+      localStorage.setItem("dai_user", JSON.stringify(data.user))
+      showMain(data.user)
+    } else {
+      showError(data.detail || data.message || "Something went wrong. Try again.")
+    }
+
+  } catch(e) {
+    showError("Cannot reach server. Is your backend running?")
+  } finally {
+    btn.disabled  = false
+    btn.innerText = currentAuthTab === "login" ? "Login" : "Create Account"
   }
-
-  const users = JSON.parse(localStorage.getItem("dai_users") || "{}")
-  const user  = users[email]
-
-  localStorage.setItem("dai_email", email)
-  localStorage.setItem("dai_phone", user?.phone || "")
-  localStorage.setItem("dai_name",  user?.name  || email.split("@")[0])
-
-  showMain()
 }
 
-// ======= MAIN SCREEN =======
-
-function showMain() {
+// ======= MAIN =======
+function showMain(user) {
   document.getElementById("authScreen").classList.remove("active")
   document.getElementById("mainScreen").classList.add("active")
 
-  const email = localStorage.getItem("dai_email")
-  const name  = localStorage.getItem("dai_name") || email.split("@")[0]
-
-  document.getElementById("profileName").innerText         = name
-  document.getElementById("profileEmailDisplay").innerText = email
-  document.getElementById("profileAvatar").innerText       = name.charAt(0).toUpperCase()
+  document.getElementById("pName").innerText   = user.name
+  document.getElementById("pEmail").innerText  = user.email
+  document.getElementById("pAvatar").innerText = user.name.charAt(0).toUpperCase()
 
   fetch(API + "/health")
     .then(() => document.getElementById("statusDot").classList.add("online"))
     .catch(() => {})
 
+  // get joined date from /me
+  fetch(API + "/me", { headers: authHeaders() })
+    .then(r => r.json())
+    .then(d => {
+      if(d.created_at)
+        document.getElementById("pJoined").innerText = "Joined " + d.created_at.split(" ")[0]
+    }).catch(() => {})
+
   loadDeadlines()
+  setupPush()
 }
 
 function logout() {
-  localStorage.removeItem("dai_email")
-  localStorage.removeItem("dai_phone")
-  localStorage.removeItem("dai_name")
+  clearToken()
+  localStorage.removeItem("dai_user")
   document.getElementById("mainScreen").classList.remove("active")
   document.getElementById("authScreen").classList.add("active")
   document.getElementById("authEmail").value    = ""
   document.getElementById("authPassword").value = ""
-  document.getElementById("chat").innerHTML     = '<div class="message bot">Hi 👋 Tell me your deadline, or say "check my deadlines", "delete daa assignment", "send an email to someone@gmail.com"!</div>'
+  document.getElementById("authName").value     = ""
+  document.getElementById("chat").innerHTML     = '<div class="message bot">Hi 👋 Tell me your deadline!</div>'
+  hideMessages()
+  switchMainTab("chat")
 }
 
 // ======= MAIN TABS =======
-
 function switchMainTab(tab) {
-  document.getElementById("chatTab").classList.toggle("active",      tab === "chat")
-  document.getElementById("deadlinesTab").classList.toggle("active", tab === "deadlines")
-  document.getElementById("profileTab").classList.toggle("active",   tab === "profile")
-
+  ["chat","deadlines","profile"].forEach(t => {
+    document.getElementById(t + "Tab").classList.toggle("active", t === tab)
+  })
   document.getElementById("chatPane").style.display      = tab === "chat"      ? "flex"  : "none"
   document.getElementById("deadlinesPane").style.display = tab === "deadlines" ? "flex"  : "none"
   document.getElementById("profilePane").style.display   = tab === "profile"   ? "block" : "none"
-
   if(tab === "deadlines") loadDeadlines()
   if(tab === "profile")   updateStats()
 }
 
-// ======= CHAT =======
+// ======= PUSH =======
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4)
+  const base64  = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)))
+}
 
+async function setupPush() {
+  if(!("serviceWorker" in navigator) || !("PushManager" in window)) return
+  try {
+    const reg  = await navigator.serviceWorker.register("sw.js")
+    const perm = await Notification.requestPermission()
+    if(perm !== "granted") return
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    })
+    await fetch(API + "/subscribe-push", {
+      method:  "POST",
+      headers: authHeaders(),
+      body:    JSON.stringify({ subscription: sub.toJSON() })
+    })
+  } catch(e) { console.log("Push setup failed:", e) }
+}
+
+// ======= CHAT =======
 function addMessage(text, type) {
   const chat = document.getElementById("chat")
   const div  = document.createElement("div")
@@ -408,9 +442,6 @@ async function sendMessage() {
   const message = input.value.trim()
   if(!message) return
 
-  const email = localStorage.getItem("dai_email")
-  const phone = localStorage.getItem("dai_phone")
-
   addMessage(message, "user")
   input.value  = ""
   btn.disabled = true
@@ -419,12 +450,14 @@ async function sendMessage() {
   try {
     const res = await fetch(API + "/chat", {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ message, email, phone })
+      headers: authHeaders(),
+      body:    JSON.stringify({ message })
     })
 
+    if(res.status === 401) { logout(); return }
+
     const data = await res.json()
-    document.querySelector(".bot:last-child").remove()
+    document.querySelector("#chat .bot:last-child").remove()
 
     if(data.status === "success") {
       const tool   = data.steps[0].tool
@@ -445,7 +478,7 @@ async function sendMessage() {
 
       } else if(tool === "suggest_reschedule") {
         const nd = result.new_deadline || result.deadline || "unknown"
-        const r  = result.reason || result.note || ""
+        const r  = result.reason || ""
         addMessage("Suggested: " + nd + (r ? "\nReason: " + r : ""), "bot")
 
       } else if(tool === "send_summary") {
@@ -457,27 +490,16 @@ async function sendMessage() {
         loadDeadlines()
 
       } else if(tool === "delete_deadline") {
-        if(result.deleted) {
-          addMessage(result.message, "bot")
-          loadDeadlines()
-        } else {
-          addMessage("Could not delete: " + (result.error || "not found"), "bot")
-        }
+        if(result.deleted) { addMessage(result.message, "bot"); loadDeadlines() }
+        else addMessage("Could not delete: " + (result.error || "not found"), "bot")
 
       } else if(tool === "rename_deadline") {
-        if(result.renamed) {
-          addMessage("Renamed '" + result.from + "' to '" + result.to + "'!", "bot")
-          loadDeadlines()
-        } else {
-          addMessage("Could not rename: " + (result.error || "not found"), "bot")
-        }
+        if(result.renamed) { addMessage("Renamed '" + result.from + "' → '" + result.to + "'!", "bot"); loadDeadlines() }
+        else addMessage("Could not rename: " + (result.error || "not found"), "bot")
 
       } else if(tool === "send_custom_email") {
-        if(result.sent) {
-          addMessage("Email sent to " + result.to + "!", "bot")
-        } else {
-          addMessage("Could not send: " + (result.error || "unknown error"), "bot")
-        }
+        if(result.sent) addMessage("Email sent to " + result.to + "!", "bot")
+        else addMessage("Could not send: " + (result.error || "unknown error"), "bot")
 
       } else {
         addMessage("Got it! Nothing needed right now.", "bot")
@@ -488,7 +510,8 @@ async function sendMessage() {
     }
 
   } catch {
-    document.querySelector(".bot:last-child").innerText = "Server not reachable. Is your backend running?"
+    const last = document.querySelector("#chat .bot:last-child")
+    if(last) last.innerText = "Server not reachable. Is your backend running?"
   } finally {
     btn.disabled = false
     input.focus()
@@ -496,7 +519,6 @@ async function sendMessage() {
 }
 
 // ======= DEADLINES =======
-
 function getCountdown(deadlineStr) {
   const diff = new Date(deadlineStr) - new Date()
   if(diff < 0) return "Overdue!"
@@ -510,86 +532,83 @@ function getCountdown(deadlineStr) {
 
 async function loadDeadlines() {
   try {
-    const res  = await fetch(API + "/deadlines")
-    const data = await res.json()
-    const list = document.getElementById("deadlinesList")
-    const countEl = document.getElementById("deadlineCount")
+    const res = await fetch(API + "/deadlines", { headers: authHeaders() })
+    if(res.status === 401) { logout(); return }
 
-    const email = localStorage.getItem("dai_email")
-    const mine  = data.filter(d => d.email === email)
-      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+    const data    = await res.json()
+    const list    = document.getElementById("deadlinesList")
+    const countEl = document.getElementById("dlCount")
+    const sorted  = [...data].sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
 
-    countEl.innerText = mine.length + " upcoming"
+    countEl.innerText = sorted.length + " upcoming"
 
-    if(mine.length === 0) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📭</div>
-          No deadlines yet. Go to Chat and add one!
-        </div>`
+    if(sorted.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>No deadlines yet.<br>Go to Chat and add one!</div>`
+      updateStats([])
       return
     }
 
     list.innerHTML = ""
-    mine.forEach(d => {
+    sorted.forEach(d => {
       const card = document.createElement("div")
       card.className = "deadline-card"
       card.innerHTML = `
-        <div class="deadline-info">
-          <div class="deadline-name">${d.subject}</div>
-          <div class="deadline-time">${d.deadline}</div>
+        <div class="dl-info">
+          <div class="dl-name">${d.subject}</div>
+          <div class="dl-time">${d.deadline}</div>
         </div>
-        <div class="deadline-right">
+        <div class="dl-right">
           <span class="urgency ${d.urgency || 'low'}">${d.urgency || 'low'}</span>
-          <span class="deadline-countdown">${getCountdown(d.deadline)}</span>
+          <span class="dl-countdown">${getCountdown(d.deadline)}</span>
         </div>`
       list.appendChild(card)
     })
 
-    updateStats(mine)
+    updateStats(sorted)
   } catch {}
 }
 
-function updateStats(mine) {
-  if(!mine) {
-    fetch(API + "/deadlines")
-      .then(r => r.json())
-      .then(data => {
-        const email = localStorage.getItem("dai_email")
-        mine = data.filter(d => d.email === email)
-        document.getElementById("statTotal").innerText = mine.length
-        document.getElementById("statHigh").innerText  = mine.filter(d => d.urgency === "high").length
-      }).catch(() => {})
-    return
-  }
-  document.getElementById("statTotal").innerText = mine.length
-  document.getElementById("statHigh").innerText  = mine.filter(d => d.urgency === "high").length
+function updateStats(data) {
+  if(!data) return
+  document.getElementById("statTotal").innerText = data.length
+  document.getElementById("statHigh").innerText  = data.filter(d => d.urgency === "high").length
 }
 
 // ======= INIT =======
-
 window.onload = () => {
-  // restore theme
   const saved = localStorage.getItem("dai_theme") || "dark"
   isDark = saved === "dark"
   document.documentElement.setAttribute("data-theme", saved)
-  document.getElementById("themeBtn").innerText = isDark ? "🌙" : "☀️"
-  document.getElementById("themeToggle").classList.toggle("on", isDark)
 
-  // auth field enter keys
-  document.getElementById("authEmail").addEventListener("keydown",    e => { if(e.key==="Enter"){e.preventDefault();doAuth()} })
-  document.getElementById("authPassword").addEventListener("keydown", e => { if(e.key==="Enter"){e.preventDefault();doAuth()} })
-  document.getElementById("authName").addEventListener("keydown",     e => { if(e.key==="Enter"){e.preventDefault();doAuth()} })
-  document.getElementById("authPhone").addEventListener("keydown",    e => { if(e.key==="Enter"){e.preventDefault();doAuth()} })
-  document.getElementById("authBtn").addEventListener("click",        e => { e.preventDefault(); doAuth() })
+  const themeBtn    = document.getElementById("themeBtn")
+  const themeToggle = document.getElementById("themeToggle")
+  if(themeBtn)    themeBtn.innerText = isDark ? "🌙" : "☀️"
+  if(themeToggle) themeToggle.classList.toggle("on", isDark)
 
-  // chat
-  document.getElementById("messageInput").addEventListener("keydown", e => { if(e.key==="Enter"){e.preventDefault();sendMessage()} })
-  document.getElementById("sendBtn").addEventListener("click",        e => { e.preventDefault(); sendMessage() })
+  const ids = ["authEmail", "authPassword", "authName"]
+  ids.forEach(id => {
+    const el = document.getElementById(id)
+    if(!el) return
+    el.addEventListener("keydown", e => {
+      if(e.key === "Enter") { e.preventDefault(); doAuth() }
+    })
+  })
 
-  // check if already logged in
-  const email = localStorage.getItem("dai_email")
-  if(email) showMain()
+  const authBtn = document.getElementById("authBtn")
+  if(authBtn) authBtn.addEventListener("click", e => { e.preventDefault(); doAuth() })
+
+  if(themeBtn) themeBtn.addEventListener("click", toggleTheme)
+
+  const msgInput = document.getElementById("messageInput")
+  const sendBtn  = document.getElementById("sendBtn")
+  if(msgInput) msgInput.addEventListener("keydown", e => {
+    if(e.key === "Enter") { e.preventDefault(); sendMessage() }
+  })
+  if(sendBtn) sendBtn.addEventListener("click", e => { e.preventDefault(); sendMessage() })
+
+  const token = getToken()
+  const user  = JSON.parse(localStorage.getItem("dai_user") || "null")
+  if(token && user) showMain(user)
 }
 </script>
 </body>
