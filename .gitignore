@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.db
+.venv/
+venv/
+private_key.pem
+public_key.pem
+*.pem
+deadlines.db
