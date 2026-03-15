@@ -244,16 +244,50 @@ def send_push(subscription_json: str, title: str, body: str):
     except Exception as e:
         print("Push failed:", e)
 
-# ---------------- REMINDER ----------------
+# ---------------- SMART REMINDERS ----------------
 
 def send_reminder(subject: str, email: str, time_left: str):
-    print(f"Reminder triggered: {subject}")
-    body = f"Hey!\n\nDeadlineAI Reminder\n\nSubject: {subject}\nTime: {time_left}\n\nDon't miss it!"
-    send_email(email, f"⏰ Reminder: {subject}", body)
+    print(f"Reminder triggered: {subject} — {time_left}")
+    if "NOW" in time_left:
+        emoji = "🚨"; urgency = "DEADLINE NOW"
+    elif "HURRY" in time_left or "10 min" in time_left:
+        emoji = "⚠️"; urgency = "HURRY UP"
+    else:
+        emoji = "⏰"; urgency = "Reminder"
+    body = f"Hey!\n\n{emoji} DeadlineAI {urgency}\n\nSubject: {subject}\nStatus: {time_left}\n\n{'🚨 SUBMIT IMMEDIATELY!' if 'NOW' in time_left else 'Don t miss it!'}"
+    send_email(email, f"{emoji} {urgency}: {subject}", body)
     cursor.execute("SELECT subscription FROM push_subscriptions WHERE email=?", (email,))
     row = cursor.fetchone()
     if row:
-        send_push(row[0], f"Deadline: {subject}", f"Due at {time_left}")
+        send_push(row[0], f"{emoji} {subject}", time_left)
+
+def schedule_smart_reminders(subject: str, email: str, deadline_str: str):
+    try:
+        deadline_dt = datetime.strptime(deadline_str, "%Y-%m-%d %H:%M")
+        now         = datetime.now()
+        diff_mins   = (deadline_dt - now).total_seconds() / 60
+        if diff_mins <= 0:
+            return
+        if diff_mins > 30:
+            for mins_before in [30, 10]:
+                remind_at = deadline_dt - timedelta(minutes=mins_before)
+                if remind_at > now:
+                    scheduler.add_job(send_reminder, "date", run_date=remind_at,
+                        args=[subject, email, f"{mins_before} minutes left!"])
+            scheduler.add_job(send_reminder, "date", run_date=deadline_dt,
+                args=[subject, email, "Deadline is NOW! Submit immediately!"])
+        else:
+            remind_at = now + timedelta(minutes=2)
+            while remind_at < deadline_dt:
+                mins_left = int((deadline_dt - remind_at).total_seconds() / 60)
+                scheduler.add_job(send_reminder, "date", run_date=remind_at,
+                    args=[subject, email, f"HURRY! Only {mins_left} minutes left!"])
+                remind_at += timedelta(minutes=10)
+            scheduler.add_job(send_reminder, "date", run_date=deadline_dt,
+                args=[subject, email, "Deadline is NOW! Submit immediately!"])
+        print(f"Smart reminders scheduled for: {subject}")
+    except Exception as e:
+        print(f"Smart reminder error: {e}")
 
 # ---------------- AI FUNCTIONS ----------------
 
@@ -266,19 +300,14 @@ Return ONLY a raw JSON array:
   {{
     "subject": "assignment or exam name",
     "deadline": "YYYY-MM-DD HH:MM",
-    "urgency": "high/medium/low",
-    "reminder_times": ["YYYY-MM-DD HH:MM", "YYYY-MM-DD HH:MM"]
+    "urgency": "high/medium/low"
   }}
 ]
 
 Today is {datetime.now().strftime("%Y-%m-%d %H:%M")}.
-
 Rules:
 - If no time mentioned assume 23:59
-- If deadline more than 1 hour away: remind 30 min and 10 min before
-- If deadline 30-60 min away: remind 15 min and 5 min before
-- If deadline less than 30 min away: remind 2 min from now
-- reminder_times must always be in the future
+- urgency: high if due within 24h, medium if within 3 days, low otherwise
 - No markdown, no explanation
 """
     return safe_parse_json(call_ai(prompt))
@@ -286,14 +315,8 @@ Rules:
 def extract_email_details(message: str) -> dict:
     prompt = f"""
 Extract email details from: "{message}"
-
 Return ONLY raw JSON:
-{{
-  "to": "recipient email",
-  "subject": "email subject",
-  "body": "email body"
-}}
-
+{{"to":"recipient email","subject":"email subject","body":"email body"}}
 Write a professional friendly body. No markdown.
 """
     return safe_parse_json(call_ai(prompt))
@@ -325,7 +348,15 @@ def delete_passed_deadlines(email: str):
     return {"deleted": cursor.rowcount}
 
 def delete_deadline(email: str, message: str):
-    prompt = f'What deadline name should be deleted from: "{message}"? Return ONLY raw JSON: {{"name":"deadline name or null if all"}}'
+    prompt = f'''
+What deadline name should be deleted based on: "{message}"?
+
+Available deadlines:
+{json.dumps(check_conflicts(email))}
+
+Return ONLY raw JSON: {{"name": "exact subject name from the list above, or null if delete all"}}
+No markdown, no explanation.
+'''
     try:
         details = safe_parse_json(call_ai(prompt))
         name    = details.get("name")
@@ -334,8 +365,8 @@ def delete_deadline(email: str, message: str):
             conn.commit()
             return {"deleted": True, "message": "Deleted all your deadlines"}
         cursor.execute(
-            "DELETE FROM deadlines WHERE email=? AND LOWER(subject) LIKE ?",
-            (email, f"%{name.lower()}%")
+            "DELETE FROM deadlines WHERE email=? AND subject=?",
+            (email, name)
         )
         conn.commit()
         if cursor.rowcount == 0:
@@ -352,10 +383,8 @@ def rename_deadline(email: str, message: str):
         new_name = details.get("new_name") or details.get("to")
         if not old_name or not new_name:
             return {"renamed": False, "error": "Could not understand names"}
-        cursor.execute(
-            "UPDATE deadlines SET subject=? WHERE email=? AND LOWER(subject) LIKE ?",
-            (new_name, email, f"%{old_name.lower()}%")
-        )
+        cursor.execute("UPDATE deadlines SET subject=? WHERE email=? AND LOWER(subject) LIKE ?",
+            (new_name, email, f"%{old_name.lower()}%"))
         conn.commit()
         if cursor.rowcount == 0:
             return {"renamed": False, "error": f"Could not find '{old_name}'"}
@@ -370,7 +399,7 @@ def safe_send_custom_email(message: str):
         subject = details.get("subject") or details.get("title") or "Message from DeadlineAI"
         body    = details.get("body") or details.get("message") or details.get("content") or message
         if not to:
-            return {"sent": False, "error": "No recipient email found. Please include an email address."}
+            return {"sent": False, "error": "No recipient email found."}
         send_email(to, subject, body)
         return {"sent": True, "to": to}
     except Exception as e:
@@ -423,7 +452,6 @@ Message: "{user_message}"
 
 def agent_loop(message: str, email: str) -> dict:
     conversation_history.append({"role": "user", "content": message})
-
     try:
         action    = plan(message, conversation_history)
         tool_name = action.get("tool", "do_nothing")
@@ -435,29 +463,18 @@ def agent_loop(message: str, email: str) -> dict:
             extracted_list = extract_deadline(message)
             saved          = []
             for extracted in extracted_list:
-                deadline_id = f"deadline_{datetime.now().timestamp()}"
+                deadline_id  = f"deadline_{datetime.now().timestamp()}"
+                deadline_str = extracted.get("deadline", "")
+                subject      = extracted.get("subject", "Unknown")
                 cursor.execute(
                     "INSERT INTO deadlines VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        deadline_id,
-                        extracted.get("subject", "Unknown"),
-                        extracted.get("deadline", ""),
-                        extracted.get("urgency", "medium"),
-                        email,
-                        datetime.now().strftime("%Y-%m-%d %H:%M")
-                    )
+                    (deadline_id, subject, deadline_str,
+                     extracted.get("urgency", "medium"), email,
+                     datetime.now().strftime("%Y-%m-%d %H:%M"))
                 )
                 conn.commit()
-                saved.append(extracted.get("subject", "deadline"))
-                for rt in extracted.get("reminder_times", []):
-                    try:
-                        scheduler.add_job(
-                            send_reminder, "date",
-                            run_date=datetime.strptime(rt, "%Y-%m-%d %H:%M"),
-                            args=[extracted.get("subject", ""), email, f"Reminder: {rt}"]
-                        )
-                    except Exception as e:
-                        print(f"Scheduler error: {e}")
+                saved.append(subject)
+                schedule_smart_reminders(subject, email, deadline_str)
             result = {"saved": saved}
         except Exception as e:
             result = {"error": str(e)}
@@ -469,6 +486,24 @@ def agent_loop(message: str, email: str) -> dict:
 
     conversation_history.append({"role": "assistant", "content": f"Used {tool_name}: {result}"})
     return {"steps": [{"tool": tool_name, "result": result}], "final": result}
+
+# ---------------- GITAM SCRAPER ----------------
+
+def save_scraped_deadline(subject: str, deadline_str: str, email: str):
+    """Save a scraped deadline directly to DB"""
+    try:
+        deadline_id = f"deadline_{datetime.now().timestamp()}"
+        cursor.execute(
+            "INSERT OR IGNORE INTO deadlines VALUES (?, ?, ?, ?, ?, ?)",
+            (deadline_id, subject, deadline_str, "high", email,
+             datetime.now().strftime("%Y-%m-%d %H:%M"))
+        )
+        conn.commit()
+        schedule_smart_reminders(subject, email, deadline_str)
+        return True
+    except Exception as e:
+        print(f"Save error: {e}")
+        return False
 
 # ================================================================
 # AUTH ENDPOINTS
@@ -578,6 +613,18 @@ async def subscribe_push(request: Request, data: PushSubscription, email: str = 
         )
         conn.commit()
         return {"status": "subscribed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/sync-gitam")
+@limiter.limit("3/minute")
+async def sync_gitam(request: Request, email: str = Depends(get_current_user)):
+    try:
+        from scraper import run_scraper
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        added = run_scraper(token)
+        return {"status": "success", "added": added or [], "count": len(added or [])}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
