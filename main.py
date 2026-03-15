@@ -254,7 +254,7 @@ def send_reminder(subject: str, email: str, time_left: str):
         emoji = "⚠️"; urgency = "HURRY UP"
     else:
         emoji = "⏰"; urgency = "Reminder"
-    body = f"Hey!\n\n{emoji} DeadlineAI {urgency}\n\nSubject: {subject}\nStatus: {time_left}\n\n{'🚨 SUBMIT IMMEDIATELY!' if 'NOW' in time_left else 'Don t miss it!'}"
+    body = f"Hey!\n\n{emoji} DeadlineAI {urgency}\n\nSubject: {subject}\nStatus: {time_left}\n\n{'🚨 SUBMIT IMMEDIATELY!' if 'NOW' in time_left else 'Dont miss it!'}"
     send_email(email, f"{emoji} {urgency}: {subject}", body)
     cursor.execute("SELECT subscription FROM push_subscriptions WHERE email=?", (email,))
     row = cursor.fetchone()
@@ -268,14 +268,18 @@ def schedule_smart_reminders(subject: str, email: str, deadline_str: str):
         diff_mins   = (deadline_dt - now).total_seconds() / 60
         if diff_mins <= 0:
             return
-        if diff_mins > 30:
+        if diff_mins > 60:
             for mins_before in [30, 10]:
                 remind_at = deadline_dt - timedelta(minutes=mins_before)
                 if remind_at > now:
                     scheduler.add_job(send_reminder, "date", run_date=remind_at,
                         args=[subject, email, f"{mins_before} minutes left!"])
-            scheduler.add_job(send_reminder, "date", run_date=deadline_dt,
-                args=[subject, email, "Deadline is NOW! Submit immediately!"])
+        elif diff_mins > 30:
+            for mins_before in [15, 5]:
+                remind_at = deadline_dt - timedelta(minutes=mins_before)
+                if remind_at > now:
+                    scheduler.add_job(send_reminder, "date", run_date=remind_at,
+                        args=[subject, email, f"{mins_before} minutes left!"])
         else:
             remind_at = now + timedelta(minutes=2)
             while remind_at < deadline_dt:
@@ -283,8 +287,8 @@ def schedule_smart_reminders(subject: str, email: str, deadline_str: str):
                 scheduler.add_job(send_reminder, "date", run_date=remind_at,
                     args=[subject, email, f"HURRY! Only {mins_left} minutes left!"])
                 remind_at += timedelta(minutes=10)
-            scheduler.add_job(send_reminder, "date", run_date=deadline_dt,
-                args=[subject, email, "Deadline is NOW! Submit immediately!"])
+        scheduler.add_job(send_reminder, "date", run_date=deadline_dt,
+            args=[subject, email, "Deadline is NOW! Submit immediately!"])
         print(f"Smart reminders scheduled for: {subject}")
     except Exception as e:
         print(f"Smart reminder error: {e}")
@@ -349,13 +353,13 @@ def delete_passed_deadlines(email: str):
 
 def delete_deadline(email: str, message: str):
     prompt = f'''
-What deadline name should be deleted based on: "{message}"?
+What deadline name to delete from: "{message}"?
 
 Available deadlines:
 {json.dumps(check_conflicts(email))}
 
-Return ONLY raw JSON: {{"name": "exact subject name from the list above, or null if delete all"}}
-No markdown, no explanation.
+Return ONLY raw JSON: {{"name":"exact subject name from list or null if delete all"}}
+No markdown.
 '''
     try:
         details = safe_parse_json(call_ai(prompt))
@@ -364,11 +368,13 @@ No markdown, no explanation.
             cursor.execute("DELETE FROM deadlines WHERE email=?", (email,))
             conn.commit()
             return {"deleted": True, "message": "Deleted all your deadlines"}
-        cursor.execute(
-            "DELETE FROM deadlines WHERE email=? AND subject=?",
-            (email, name)
-        )
+        cursor.execute("DELETE FROM deadlines WHERE email=? AND subject=?", (email, name))
         conn.commit()
+        if cursor.rowcount == 0:
+            # fallback to LIKE
+            cursor.execute("DELETE FROM deadlines WHERE email=? AND LOWER(subject) LIKE ?",
+                (email, f"%{name.lower()}%"))
+            conn.commit()
         if cursor.rowcount == 0:
             return {"deleted": False, "error": f"Could not find '{name}'"}
         return {"deleted": True, "message": f"Deleted '{name}'"}
@@ -376,21 +382,84 @@ No markdown, no explanation.
         return {"deleted": False, "error": str(e)}
 
 def rename_deadline(email: str, message: str):
-    prompt = f'Extract rename from: "{message}". Return ONLY raw JSON: {{"old_name":"...","new_name":"..."}}'
+    prompt = f'''
+Extract rename details from: "{message}"
+
+Available deadlines:
+{json.dumps(check_conflicts(email))}
+
+Return ONLY raw JSON: {{"old_name":"exact subject from list","new_name":"new name"}}
+No markdown.
+'''
     try:
         details  = safe_parse_json(call_ai(prompt))
         old_name = details.get("old_name") or details.get("from")
         new_name = details.get("new_name") or details.get("to")
         if not old_name or not new_name:
             return {"renamed": False, "error": "Could not understand names"}
-        cursor.execute("UPDATE deadlines SET subject=? WHERE email=? AND LOWER(subject) LIKE ?",
-            (new_name, email, f"%{old_name.lower()}%"))
+        cursor.execute(
+            "UPDATE deadlines SET subject=? WHERE email=? AND subject=?",
+            (new_name, email, old_name)
+        )
         conn.commit()
+        if cursor.rowcount == 0:
+            cursor.execute(
+                "UPDATE deadlines SET subject=? WHERE email=? AND LOWER(subject) LIKE ?",
+                (new_name, email, f"%{old_name.lower()}%")
+            )
+            conn.commit()
         if cursor.rowcount == 0:
             return {"renamed": False, "error": f"Could not find '{old_name}'"}
         return {"renamed": True, "from": old_name, "to": new_name}
     except Exception as e:
         return {"renamed": False, "error": str(e)}
+
+def update_deadline_time(email: str, message: str):
+    prompt = f'''
+Extract deadline update details from: "{message}"
+
+Available deadlines:
+{json.dumps(check_conflicts(email))}
+
+Today is {datetime.now().strftime("%Y-%m-%d %H:%M")}.
+
+Return ONLY raw JSON:
+{{"name":"exact subject name from list","new_deadline":"YYYY-MM-DD HH:MM"}}
+No markdown, no explanation.
+'''
+    try:
+        details      = safe_parse_json(call_ai(prompt))
+        name         = details.get("name")
+        new_deadline = details.get("new_deadline")
+
+        if not name or not new_deadline:
+            return {"updated": False, "error": "Could not understand which deadline to update or new time"}
+
+        # update in DB
+        cursor.execute(
+            "UPDATE deadlines SET deadline=? WHERE email=? AND subject=?",
+            (new_deadline, email, name)
+        )
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            # fallback LIKE match
+            cursor.execute(
+                "UPDATE deadlines SET deadline=? WHERE email=? AND LOWER(subject) LIKE ?",
+                (new_deadline, email, f"%{name.lower()}%")
+            )
+            conn.commit()
+
+        if cursor.rowcount == 0:
+            return {"updated": False, "error": f"Could not find deadline '{name}'"}
+
+        # reschedule smart reminders with new time
+        schedule_smart_reminders(name, email, new_deadline)
+
+        return {"updated": True, "name": name, "new_deadline": new_deadline}
+
+    except Exception as e:
+        return {"updated": False, "error": str(e)}
 
 def safe_send_custom_email(message: str):
     try:
@@ -416,6 +485,7 @@ def execute_tool(tool_name: str, message: str, email: str):
         "delete_passed_deadlines": lambda: delete_passed_deadlines(email),
         "delete_deadline":         lambda: delete_deadline(email, message),
         "rename_deadline":         lambda: rename_deadline(email, message),
+        "update_deadline_time":    lambda: update_deadline_time(email, message),
         "send_custom_email":       lambda: safe_send_custom_email(message),
         "do_nothing":              lambda: {"status": "no action needed"},
     }
@@ -433,11 +503,12 @@ You are a deadline management agent. Pick the right tool.
 Tools:
 - extract_deadline: user giving a new deadline to save
 - check_conflicts: user wants to see their deadlines
-- suggest_reschedule: user wants to reschedule something
+- suggest_reschedule: user wants AI to suggest a better time
 - send_summary: user wants a summary emailed to them
 - delete_passed_deadlines: delete only past deadlines
 - delete_deadline: delete a specific deadline by name or all
-- rename_deadline: rename a deadline
+- rename_deadline: rename/change the name of a deadline
+- update_deadline_time: change the date or time of an existing deadline
 - send_custom_email: send an email to someone else
 - do_nothing: casual chat, greetings, no action needed
 
@@ -486,24 +557,6 @@ def agent_loop(message: str, email: str) -> dict:
 
     conversation_history.append({"role": "assistant", "content": f"Used {tool_name}: {result}"})
     return {"steps": [{"tool": tool_name, "result": result}], "final": result}
-
-# ---------------- GITAM SCRAPER ----------------
-
-def save_scraped_deadline(subject: str, deadline_str: str, email: str):
-    """Save a scraped deadline directly to DB"""
-    try:
-        deadline_id = f"deadline_{datetime.now().timestamp()}"
-        cursor.execute(
-            "INSERT OR IGNORE INTO deadlines VALUES (?, ?, ?, ?, ?, ?)",
-            (deadline_id, subject, deadline_str, "high", email,
-             datetime.now().strftime("%Y-%m-%d %H:%M"))
-        )
-        conn.commit()
-        schedule_smart_reminders(subject, email, deadline_str)
-        return True
-    except Exception as e:
-        print(f"Save error: {e}")
-        return False
 
 # ================================================================
 # AUTH ENDPOINTS
@@ -620,13 +673,7 @@ async def subscribe_push(request: Request, data: PushSubscription, email: str = 
 @app.post("/sync-gitam")
 @limiter.limit("3/minute")
 async def sync_gitam(request: Request, email: str = Depends(get_current_user)):
-    try:
-        from scraper import run_scraper
-        token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        added = run_scraper(token)
-        return {"status": "success", "added": added or [], "count": len(added or [])}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    return {"status": "coming_soon", "message": "GITAM Sync is still in development. Coming soon!"}
 
 
 @app.get("/health")
