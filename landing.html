@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeadlineAI — Never Miss a Deadline Again</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:#050508;color:#f0f0ff;font-family:'DM Sans',sans-serif;overflow-x:hidden;}
+
+/* ── GRID BACKGROUND ── */
+.grid-bg{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background-image:
+    linear-gradient(rgba(124,111,255,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,111,255,0.06) 1px, transparent 1px);
+  background-size:60px 60px;
+  pointer-events:none;z-index:0;
+}
+
+/* ── NAVBAR ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:20px 60px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(5,5,8,0.8);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.nav-logo{font-size:22px;font-weight:700;letter-spacing:-0.5px;}
+.nav-logo em{font-style:normal;color:#7c6fff;}
+.nav-links{display:flex;align-items:center;gap:32px;}
+.nav-links a{color:#8888aa;font-size:14px;text-decoration:none;transition:color 0.2s;}
+.nav-links a:hover{color:#f0f0ff;}
+.nav-cta{
+  background:#7c6fff;color:white;padding:10px 24px;
+  border-radius:8px;font-size:14px;font-weight:600;
+  text-decoration:none;transition:opacity 0.2s,box-shadow 0.2s;
+  box-shadow:0 4px 20px rgba(124,111,255,0.3);
+}
+.nav-cta:hover{opacity:0.9;box-shadow:0 6px 28px rgba(124,111,255,0.4);}
+
+/* ── HERO ── */
+.hero{
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;
+  padding:120px 40px 80px;
+  position:relative;z-index:1;
+}
+
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(124,111,255,0.1);
+  border:1px solid rgba(124,111,255,0.3);
+  color:#a89fff;font-size:13px;font-weight:500;
+  padding:6px 16px;border-radius:20px;
+  margin-bottom:28px;
+}
+.hero-badge span{width:6px;height:6px;border-radius:50%;background:#7c6fff;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+.hero h1{
+  font-size:clamp(40px,6vw,80px);
+  font-weight:800;
+  line-height:1.1;
+  letter-spacing:-2px;
+  margin-bottom:12px;
+  max-width:900px;
+}
+
+.hero h1 .gradient-text{
+  background:linear-gradient(135deg,#7c6fff 0%,#a78bfa 40%,#06d6a0 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  animation:gradientShift 4s ease infinite;
+  background-size:200% 200%;
+}
+@keyframes gradientShift{
+  0%{background-position:0% 50%;}
+  50%{background-position:100% 50%;}
+  100%{background-position:0% 50%;}
+}
+
+/* typing animation */
+.typing-wrap{
+  font-size:clamp(40px,6vw,80px);
+  font-weight:800;
+  letter-spacing:-2px;
+  margin-bottom:28px;
+  min-height:1.2em;
+}
+.typing-text{color:#7c6fff;}
+.cursor{animation:blink 0.7s infinite;color:#7c6fff;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
+
+.hero p{
+  font-size:clamp(16px,2vw,20px);
+  color:#8888aa;
+  max-width:600px;
+  line-height:1.7;
+  margin-bottom:40px;
+}
+
+.hero-btns{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center;}
+.btn-primary{
+  background:#7c6fff;color:white;
+  padding:14px 32px;border-radius:10px;
+  font-size:15px;font-weight:600;
+  text-decoration:none;
+  transition:all 0.2s;
+  box-shadow:0 4px 24px rgba(124,111,255,0.4);
+}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(124,111,255,0.5);}
+.btn-secondary{
+  color:#a89fff;padding:14px 32px;
+  border-radius:10px;font-size:15px;font-weight:500;
+  text-decoration:none;
+  border:1px solid rgba(124,111,255,0.3);
+  transition:all 0.2s;
+}
+.btn-secondary:hover{background:rgba(124,111,255,0.1);color:white;}
+
+/* glow orbs */
+.orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;}
+.orb1{width:500px;height:500px;background:rgba(124,111,255,0.12);top:-100px;left:-100px;}
+.orb2{width:400px;height:400px;background:rgba(6,214,160,0.08);bottom:-50px;right:-50px;}
+.orb3{width:300px;height:300px;background:rgba(124,111,255,0.08);top:50%;left:50%;transform:translate(-50%,-50%);}
+
+/* ── STATS ── */
+.stats{
+  position:relative;z-index:1;
+  padding:60px 60px;
+  display:flex;justify-content:center;gap:80px;flex-wrap:wrap;
+  border-top:1px solid rgba(255,255,255,0.05);
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.stat{text-align:center;}
+.stat-num{font-size:42px;font-weight:800;color:#7c6fff;font-family:'DM Mono',monospace;letter-spacing:-1px;}
+.stat-label{font-size:14px;color:#8888aa;margin-top:4px;}
+
+/* ── FEATURES ── */
+.section{position:relative;z-index:1;padding:100px 60px;max-width:1200px;margin:0 auto;}
+.section-label{
+  font-size:12px;font-weight:600;color:#7c6fff;
+  text-transform:uppercase;letter-spacing:2px;
+  margin-bottom:16px;
+}
+.section-title{
+  font-size:clamp(28px,4vw,48px);font-weight:800;
+  letter-spacing:-1px;line-height:1.2;
+  margin-bottom:16px;
+}
+.section-sub{font-size:16px;color:#8888aa;max-width:500px;line-height:1.7;margin-bottom:60px;}
+
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:20px;
+}
+.feature-card{
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;padding:28px;
+  transition:all 0.3s;
+  position:relative;overflow:hidden;
+}
+.feature-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,#7c6fff,transparent);
+  opacity:0;transition:opacity 0.3s;
+}
+.feature-card:hover{
+  border-color:rgba(124,111,255,0.3);
+  background:rgba(124,111,255,0.05);
+  transform:translateY(-4px);
+}
+.feature-card:hover::before{opacity:1;}
+.feature-icon{
+  width:48px;height:48px;border-radius:12px;
+  background:rgba(124,111,255,0.15);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin-bottom:16px;
+}
+.feature-title{font-size:17px;font-weight:700;margin-bottom:8px;}
+.feature-desc{font-size:14px;color:#8888aa;line-height:1.6;}
+
+/* ── HOW IT WORKS ── */
+.steps{display:flex;flex-direction:column;gap:0;}
+.step{
+  display:flex;align-items:flex-start;gap:32px;
+  padding:40px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  position:relative;
+}
+.step:last-child{border-bottom:none;}
+.step-num{
+  width:52px;height:52px;border-radius:50%;
+  background:rgba(124,111,255,0.15);
+  border:1px solid rgba(124,111,255,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:800;color:#7c6fff;
+  flex-shrink:0;font-family:'DM Mono',monospace;
+}
+.step-content h3{font-size:20px;font-weight:700;margin-bottom:8px;}
+.step-content p{font-size:15px;color:#8888aa;line-height:1.6;}
+.step-tag{
+  display:inline-block;
+  background:rgba(6,214,160,0.1);
+  border:1px solid rgba(6,214,160,0.2);
+  color:#06d6a0;font-size:11px;font-weight:600;
+  padding:3px 10px;border-radius:20px;
+  margin-top:10px;text-transform:uppercase;letter-spacing:1px;
+}
+
+/* ── DEMO MOCKUP ── */
+.demo-section{
+  position:relative;z-index:1;
+  padding:100px 60px;
+  text-align:center;
+}
+.demo-mockup{
+  max-width:800px;margin:60px auto 0;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:20px;overflow:hidden;
+  box-shadow:0 40px 80px rgba(0,0,0,0.4),0 0 0 1px rgba(124,111,255,0.1);
+}
+.mockup-bar{
+  background:rgba(255,255,255,0.04);
+  padding:12px 20px;
+  display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.mockup-dot{width:12px;height:12px;border-radius:50%;}
+.mockup-dot:nth-child(1){background:#ff5f57;}
+.mockup-dot:nth-child(2){background:#febc2e;}
+.mockup-dot:nth-child(3){background:#28c840;}
+.mockup-url{
+  flex:1;background:rgba(255,255,255,0.05);
+  border-radius:6px;padding:4px 12px;
+  font-size:12px;color:#8888aa;font-family:'DM Mono',monospace;
+  margin-left:12px;
+}
+.mockup-body{padding:32px;text-align:left;}
+.chat-demo{display:flex;flex-direction:column;gap:16px;}
+.chat-msg{display:flex;gap:12px;align-items:flex-start;}
+.chat-msg.user{flex-direction:row-reverse;}
+.chat-avatar{
+  width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;flex-shrink:0;
+}
+.chat-msg.bot .chat-avatar{background:#7c6fff;color:white;}
+.chat-msg.user .chat-avatar{background:rgba(255,255,255,0.1);color:#8888aa;}
+.chat-bubble{
+  padding:10px 14px;border-radius:12px;
+  font-size:14px;line-height:1.5;max-width:70%;
+}
+.chat-msg.bot  .chat-bubble{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);}
+.chat-msg.user .chat-bubble{background:#7c6fff;color:white;}
+
+/* ── CTA ── */
+.cta-section{
+  position:relative;z-index:1;
+  padding:100px 60px;text-align:center;
+  background:linear-gradient(180deg,transparent,rgba(124,111,255,0.05),transparent);
+}
+.cta-section h2{
+  font-size:clamp(32px,5vw,60px);font-weight:800;
+  letter-spacing:-1.5px;margin-bottom:20px;
+}
+.cta-section p{font-size:18px;color:#8888aa;margin-bottom:40px;}
+
+/* ── FOOTER ── */
+footer{
+  position:relative;z-index:1;
+  padding:40px 60px;
+  border-top:1px solid rgba(255,255,255,0.05);
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:16px;
+}
+.footer-logo{font-size:18px;font-weight:700;}
+.footer-logo em{font-style:normal;color:#7c6fff;}
+.footer-text{font-size:13px;color:#8888aa;}
+
+/* ── ANIMATIONS ── */
+.fade-up{opacity:0;transform:translateY(30px);transition:all 0.7s ease;}
+.fade-up.visible{opacity:1;transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- NAVBAR -->
+<nav>
+  <div class="nav-logo">Deadline<em>AI</em></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="#demo">Demo</a>
+  </div>
+  <a href="index.html" class="nav-cta">Get Started Free →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+
+  <div class="hero-badge">
+    <span></span>
+    Agentic AI for Students
+  </div>
+
+  <h1>Never miss a deadline<br>with <span class="gradient-text">Agentic AI</span></h1>
+
+  <div class="typing-wrap">
+    <span class="typing-text" id="typingText"></span><span class="cursor">|</span>
+  </div>
+
+  <p>DeadlineAI understands natural language, automatically schedules reminders, and notifies you via email — so you can focus on doing the work, not tracking it.</p>
+
+  <div class="hero-btns">
+    <a href="index.html" class="btn-primary">Start for Free →</a>
+    <a href="#demo" class="btn-secondary">See it in action</a>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat fade-up">
+    <div class="stat-num">100%</div>
+    <div class="stat-label">Free to use</div>
+  </div>
+  <div class="stat fade-up">
+    <div class="stat-num">8+</div>
+    <div class="stat-label">AI-powered tools</div>
+  </div>
+  <div class="stat fade-up">
+    <div class="stat-num">&lt;1s</div>
+    <div class="stat-label">Deadline extraction</div>
+  </div>
+  <div class="stat fade-up">
+    <div class="stat-num">24/7</div>
+    <div class="stat-label">Automatic reminders</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-label">Features</div>
+  <h2 class="section-title fade-up">Everything you need to<br>stay on top of deadlines</h2>
+  <p class="section-sub fade-up">Built for students who are tired of missing assignments, exams, and submissions.</p>
+
+  <div class="features-grid">
+    <div class="feature-card fade-up">
+      <div class="feature-icon">🧠</div>
+      <div class="feature-title">Natural Language Understanding</div>
+      <div class="feature-desc">Just say "ML assignment due tomorrow at 5pm" — DeadlineAI extracts the deadline automatically using Llama 3.3 AI.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">⏰</div>
+      <div class="feature-title">Smart Reminders</div>
+      <div class="feature-desc">Reminders 30 min and 10 min before. If deadline is under 30 mins away, you get reminded every 10 minutes until you submit.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">📧</div>
+      <div class="feature-title">Email Notifications</div>
+      <div class="feature-desc">Automatic email reminders with escalating urgency. From gentle nudges to 🚨 SUBMIT NOW alerts.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">🔔</div>
+      <div class="feature-title">Browser Push Notifications</div>
+      <div class="feature-desc">Get notified on your laptop even when the tab is closed. Never miss a reminder again.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">🗂️</div>
+      <div class="feature-title">Deadline Dashboard</div>
+      <div class="feature-desc">Visual grid of all your deadlines with live countdowns, urgency badges, and automatic cleanup when they pass.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">✉️</div>
+      <div class="feature-title">Send Emails via AI</div>
+      <div class="feature-desc">Say "send an email to professor@college.edu asking for an extension" — AI writes and sends it for you.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">🔒</div>
+      <div class="feature-title">Secure Authentication</div>
+      <div class="feature-desc">JWT tokens, bcrypt passwords, brute force protection, rate limiting — your data is fully protected.</div>
+    </div>
+    <div class="feature-card fade-up">
+      <div class="feature-icon">🤖</div>
+      <div class="feature-title">Agentic AI Loop</div>
+      <div class="feature-desc">The AI plans, decides, and acts on its own — not just a chatbot. It chooses the right tool for every message.</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how-it-works">
+  <div class="section-label">How it works</div>
+  <h2 class="section-title fade-up">From message to reminder<br>in seconds</h2>
+  <p class="section-sub fade-up">DeadlineAI uses an agentic loop — plan, decide, act — all automatically.</p>
+
+  <div class="steps">
+    <div class="step fade-up">
+      <div class="step-num">01</div>
+      <div class="step-content">
+        <h3>You type your deadline naturally</h3>
+        <p>No forms, no dropdowns. Just say "DAA assignment due this Friday at 11pm" or "OS exam next Monday morning".</p>
+        <span class="step-tag">Natural Language</span>
+      </div>
+    </div>
+    <div class="step fade-up">
+      <div class="step-num">02</div>
+      <div class="step-content">
+        <h3>AI extracts and saves automatically</h3>
+        <p>Llama 3.3 70B parses the subject, deadline time, and urgency level — saves it to your personal database instantly.</p>
+        <span class="step-tag">AI Extraction</span>
+      </div>
+    </div>
+    <div class="step fade-up">
+      <div class="step-num">03</div>
+      <div class="step-content">
+        <h3>Smart reminders are scheduled</h3>
+        <p>Based on how far away your deadline is, the scheduler sets reminders at the perfect times automatically.</p>
+        <span class="step-tag">Auto Scheduling</span>
+      </div>
+    </div>
+    <div class="step fade-up">
+      <div class="step-num">04</div>
+      <div class="step-content">
+        <h3>You get notified at the right time</h3>
+        <p>Email + browser push notifications fire automatically. Escalating urgency — from gentle reminders to 🚨 SUBMIT NOW alerts.</p>
+        <span class="step-tag">Multi-channel Alerts</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section class="demo-section" id="demo">
+  <div class="section-label" style="display:inline-block;">Live Demo</div>
+  <h2 class="section-title fade-up" style="margin-top:12px;">See DeadlineAI in action</h2>
+  <p class="fade-up" style="color:#8888aa;font-size:16px;">A real conversation with the AI</p>
+
+  <div class="demo-mockup fade-up">
+    <div class="mockup-bar">
+      <div class="mockup-dot"></div>
+      <div class="mockup-dot"></div>
+      <div class="mockup-dot"></div>
+      <div class="mockup-url">deadlineai.app</div>
+    </div>
+    <div class="mockup-body">
+      <div class="chat-demo">
+        <div class="chat-msg bot">
+          <div class="chat-avatar">AI</div>
+          <div class="chat-bubble">Hi! Tell me your deadline. You can also say "check my deadlines" or "send me a summary"!</div>
+        </div>
+        <div class="chat-msg user">
+          <div class="chat-avatar">R</div>
+          <div class="chat-bubble">bro got daa assignment tomorrow at 1pm</div>
+        </div>
+        <div class="chat-msg bot">
+          <div class="chat-avatar">AI</div>
+          <div class="chat-bubble">Saved: DAA assignment ✅<br>Reminders set for 12:30pm and 12:50pm tomorrow!</div>
+        </div>
+        <div class="chat-msg user">
+          <div class="chat-avatar">R</div>
+          <div class="chat-bubble">send an email to professor@gitam.edu asking for extension on OS assignment</div>
+        </div>
+        <div class="chat-msg bot">
+          <div class="chat-avatar">AI</div>
+          <div class="chat-bubble">Email sent to professor@gitam.edu! 📧<br>Subject: Request for Extension — OS Assignment</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2 class="fade-up">Ready to never miss<br>a deadline again?</h2>
+  <p class="fade-up">Free forever. No credit card. Just sign up and start.</p>
+  <a href="index.html" class="btn-primary fade-up" style="font-size:16px;padding:16px 40px;">Get Started Free →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Deadline<em>AI</em></div>
+  <div class="footer-text">Built for students, by students. © 2026 DeadlineAI</div>
+</footer>
+
+<script>
+// ── TYPING ANIMATION ──
+const phrases = [
+  "ML assignment due tomorrow",
+  "OS exam next Monday",
+  "DBMS lab submission Friday",
+  "Project report due tonight",
+  "Quiz at 3pm today"
+]
+let phraseIdx = 0, charIdx = 0, deleting = false
+const el = document.getElementById("typingText")
+
+function type() {
+  const phrase = phrases[phraseIdx]
+  if(!deleting) {
+    el.textContent = phrase.slice(0, ++charIdx)
+    if(charIdx === phrase.length) { deleting = true; setTimeout(type, 1800); return }
+  } else {
+    el.textContent = phrase.slice(0, --charIdx)
+    if(charIdx === 0) { deleting = false; phraseIdx = (phraseIdx + 1) % phrases.length }
+  }
+  setTimeout(type, deleting ? 40 : 80)
+}
+type()
+
+// ── SCROLL ANIMATIONS ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add("visible") })
+}, { threshold: 0.1 })
+
+document.querySelectorAll(".fade-up").forEach(el => observer.observe(el))
+</script>
+</body>
+</html>
